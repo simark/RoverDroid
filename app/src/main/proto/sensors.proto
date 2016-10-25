@@ -1,0 +1,30 @@
+syntax = "proto2";
+
+option java_package = "ca.simark.roverdroid.proto";
+
+package PolarsysRover;
+
+message Acceleration {
+  required float x = 1;
+  required float y = 2;
+  required float z = 3;
+}
+
+message Gyro {
+  required float x = 1;
+  required float y = 2;
+  required float z = 3;
+}
+
+message Compass {
+  required float x = 1;
+  required float y = 2;
+  required float z = 3;
+}
+
+message RoverSensors {
+  optional Acceleration accel = 1;
+  optional Gyro gyro = 2;
+  optional Compass compass = 3;
+  optional uint32 sonar = 4;
+}

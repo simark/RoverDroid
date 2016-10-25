@@ -5,27 +5,35 @@ import android.content.DialogInterface;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.widget.TextView;
+
+import com.google.protobuf.InvalidProtocolBufferException;
 
 import org.eclipse.paho.android.service.MqttAndroidClient;
 import org.eclipse.paho.client.mqttv3.IMqttActionListener;
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
 import org.eclipse.paho.client.mqttv3.IMqttToken;
 import org.eclipse.paho.client.mqttv3.MqttCallback;
+import org.eclipse.paho.client.mqttv3.MqttClient;
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 
 import java.util.Timer;
 import java.util.TimerTask;
 
+import ca.simark.roverdroid.proto.Sensors;
+
 public class ControlPanelActivity extends AppCompatActivity implements MqttCallback {
 
     MqttAndroidClient fClient;
+    TextView fBoiteDeTexte;
 
     public static final String TAG = ControlPanelActivity.class.getSimpleName();
 
     ProgressDialog fProgressDialog;
 
-    static final String SERVER_URI = "tcp://iot.eclipse.org:1883";
+    static final String SERVER_URI = "tcp://10.0.0.11:1883";
 
     private void showProgressDialog() {
         fProgressDialog = new ProgressDialog(this);
@@ -49,10 +57,6 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
         }
     }
 
-    private String generateClientId() {
-        return "foo";
-    }
-
     @Override
     protected void onStart() {
         super.onStart();
@@ -67,8 +71,12 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
 
         setContentView(R.layout.activity_control_panel);
 
-        fClient = new MqttAndroidClient(this, SERVER_URI, generateClientId());
+        fBoiteDeTexte = (TextView) findViewById(R.id.boitedetexte);
+        fBoiteDeTexte.setText("Allo!");
+
+        fClient = new MqttAndroidClient(this, SERVER_URI, MqttClient.generateClientId());
         fClient.setCallback(this);
+        MqttConnectOptions opt;
         try {
             fClient.connect(null, new IMqttActionListener() {
                 @Override
@@ -115,11 +123,23 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
     @Override
     public void connectionLost(Throwable cause) {
         Log.e(TAG, "Connection lost!");
+        Log.e(TAG, "cause: " + cause);
     }
 
     @Override
     public void messageArrived(String topic, MqttMessage message) throws Exception {
         Log.i(TAG, "Message arrived, " + message.getPayload().length + " bytes.");
+        try {
+            Sensors.RoverSensors roverSensors = Sensors.RoverSensors.parseFrom(message.getPayload());
+            Log.i(TAG, "Parsed message " + roverSensors);
+            if (roverSensors.hasAccel() && roverSensors.getAccel().hasX()) {
+                fBoiteDeTexte.setText("Accel x: " + roverSensors.getAccel().getX());
+            }
+        } catch (InvalidProtocolBufferException e) {
+            Log.e(TAG, "Protobuf parse exception: " + e);
+            throw e;
+        }
+
     }
 
     @Override
