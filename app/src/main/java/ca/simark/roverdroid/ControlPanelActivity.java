@@ -2,8 +2,8 @@ package ca.simark.roverdroid;
 
 import android.app.ProgressDialog;
 import android.content.DialogInterface;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.widget.TextView;
 
@@ -18,9 +18,6 @@ import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
-
-import java.util.Timer;
-import java.util.TimerTask;
 
 import ca.simark.roverdroid.proto.Sensors;
 
@@ -61,24 +58,25 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
     protected void onStart() {
         super.onStart();
         Log.i(TAG, "onStart");
+        doConnect();
     }
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    protected void onStop() {
+        super.onStop();
+        Log.i(TAG, "onStop");
+        doDisconnect();
+    }
 
-        Log.i(TAG, "onCreate");
-
-        setContentView(R.layout.activity_control_panel);
-
-        fBoiteDeTexte = (TextView) findViewById(R.id.boitedetexte);
-        fBoiteDeTexte.setText("Allo!");
-
+    private void doConnect() {
         fClient = new MqttAndroidClient(this, SERVER_URI, MqttClient.generateClientId());
         fClient.setCallback(this);
-        MqttConnectOptions opt;
+
         try {
-            fClient.connect(null, new IMqttActionListener() {
+            MqttConnectOptions opt = new MqttConnectOptions();
+            opt.setAutomaticReconnect(true);
+
+            fClient.connect(opt, null, new IMqttActionListener() {
                 @Override
                 public void onSuccess(IMqttToken asyncActionToken) {
                     Log.i(TAG, "Connect success.");
@@ -97,6 +95,40 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
         }
 
         showProgressDialog();
+    }
+
+    private void doDisconnect() {
+        if (fClient != null) {
+            try {
+                fClient.disconnect(null, new IMqttActionListener() {
+                    @Override
+                    public void onSuccess(IMqttToken asyncActionToken) {
+                        Log.i(TAG, "Disconnect success");
+                    }
+
+                    @Override
+                    public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
+                        Log.e(TAG, "Disconnect failure", exception);
+                    }
+                });
+                fClient.unregisterResources();
+            } catch (MqttException e) {
+                Log.e(TAG, "disconnect error", e);
+            } finally {
+                fClient = null;
+            }
+        }
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        Log.i(TAG, "onCreate");
+
+        setContentView(R.layout.activity_control_panel);
+
+        fBoiteDeTexte = (TextView) findViewById(R.id.boitedetexte);
     }
 
     private void doSubscribe() {
@@ -129,7 +161,7 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
     @Override
     public void messageArrived(String topic, MqttMessage message) throws Exception {
         Log.i(TAG, "Message arrived, " + message.getPayload().length + " bytes.");
-        try {
+        /*try {
             Sensors.RoverSensors roverSensors = Sensors.RoverSensors.parseFrom(message.getPayload());
             Log.i(TAG, "Parsed message " + roverSensors);
             if (roverSensors.hasAccel() && roverSensors.getAccel().hasX()) {
@@ -138,7 +170,8 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
         } catch (InvalidProtocolBufferException e) {
             Log.e(TAG, "Protobuf parse exception: " + e);
             throw e;
-        }
+        }*/
+        fBoiteDeTexte.setText(new String(message.getPayload()));
 
     }
 
