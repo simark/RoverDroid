@@ -1,6 +1,7 @@
 package ca.simark.roverdroid;
 
 import android.content.Context;
+import android.content.Intent;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 import android.support.v7.app.AppCompatActivity;
@@ -101,7 +102,6 @@ public class BrowserActivity extends AppCompatActivity implements NsdManager.Dis
                         DiscoveredRover rover = fDiscoveredRoverArrayAdapter.getItem(i);
 
                         if (nsdServiceInfoEquals(nsdServiceInfo, rover.getNsdServiceInfo())) {
-                            Log.d(TAG, "TRUE");
                             fDiscoveredRoverArrayAdapter.remove(rover);
                             break;
                         }
@@ -109,6 +109,15 @@ public class BrowserActivity extends AppCompatActivity implements NsdManager.Dis
                 }
             }
         });
+    }
+
+    void launchRoverDashboard(DiscoveredRover rover) {
+        Intent launchIntent = new Intent(this, ControlPanelActivity.class);
+
+        launchIntent.putExtra("host", rover.getNsdServiceInfo().getHost().getHostAddress());
+        launchIntent.putExtra("port", rover.getNsdServiceInfo().getPort());
+
+        startActivity(launchIntent);
     }
 
     private boolean nsdServiceInfoEquals(NsdServiceInfo a, NsdServiceInfo b) {
@@ -122,7 +131,8 @@ public class BrowserActivity extends AppCompatActivity implements NsdManager.Dis
     @Override
     public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
         DiscoveredRover rover = fDiscoveredRovers.get(i);
-        Toast.makeText(this, "You clicked on " + rover.toString(), Toast.LENGTH_LONG).show();
+
+        launchRoverDashboard(rover);
     }
 
     class ResolveServiceListener implements NsdManager.ResolveListener {
@@ -139,8 +149,25 @@ public class BrowserActivity extends AppCompatActivity implements NsdManager.Dis
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
+                    DiscoveredRover newRover = new DiscoveredRover(nsdServiceInfo);
+                    boolean added = false;
+
                     synchronized (fDiscoveredRoverArrayAdapter) {
-                        fDiscoveredRoverArrayAdapter.add(new DiscoveredRover(nsdServiceInfo));
+                        /* Look if we already know about this service. */
+                        for (int i = 0; i < fDiscoveredRoverArrayAdapter.getCount(); i++) {
+                            DiscoveredRover rover = fDiscoveredRoverArrayAdapter.getItem(i);
+
+                            if (nsdServiceInfoEquals(nsdServiceInfo, rover.getNsdServiceInfo())) {
+                                fDiscoveredRovers.set(i, newRover);
+                                fDiscoveredRoverArrayAdapter.notifyDataSetChanged();
+                                added = true;
+                                break;
+                            }
+                        }
+
+                        if (!added) {
+                            fDiscoveredRoverArrayAdapter.add(new DiscoveredRover(nsdServiceInfo));
+                        }
                     }
 
                 }

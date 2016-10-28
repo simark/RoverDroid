@@ -16,7 +16,7 @@ public class DiscoveredRover {
 
     @Override
     public String toString() {
-        return String.format("Rover \"%s\" at %s:%d",
+        return String.format("Rover \"%s\"\n%s:%d",
                 fNsdServiceInfo.getServiceName(),
                 fNsdServiceInfo.getHost().getHostAddress(),
                 fNsdServiceInfo.getPort());

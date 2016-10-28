@@ -2,6 +2,7 @@ package ca.simark.roverdroid;
 
 import android.app.ProgressDialog;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
@@ -25,17 +26,17 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
 
     MqttAndroidClient fClient;
     TextView fBoiteDeTexte;
+    String fHost;
+    int fPort;
 
     public static final String TAG = ControlPanelActivity.class.getSimpleName();
 
     ProgressDialog fProgressDialog;
 
-    static final String SERVER_URI = "tcp://10.0.0.11:1883";
-
     private void showProgressDialog() {
         fProgressDialog = new ProgressDialog(this);
         fProgressDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
-        fProgressDialog.setMessage("Trying to connect to " + SERVER_URI + "...");
+        fProgressDialog.setMessage("Trying to connect to " + fHost + ":" + fPort + "...");
         fProgressDialog.setIndeterminate(true);
         fProgressDialog.setCanceledOnTouchOutside(false);
         fProgressDialog.setCancelable(true);
@@ -69,7 +70,9 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
     }
 
     private void doConnect() {
-        fClient = new MqttAndroidClient(this, SERVER_URI, MqttClient.generateClientId());
+        String uri = String.format("tcp://%s:%d", fHost, fPort);
+
+        fClient = new MqttAndroidClient(this, uri, MqttClient.generateClientId());
         fClient.setCallback(this);
 
         try {
@@ -124,7 +127,12 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        Log.i(TAG, "onCreate");
+        Intent launchIntent = getIntent();
+
+        fHost = launchIntent.getStringExtra("host");
+        fPort = launchIntent.getIntExtra("port", -1);
+
+        Log.i(TAG, "onCreate " + fHost + " " + fPort);
 
         setContentView(R.layout.activity_control_panel);
 
@@ -161,7 +169,7 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
     @Override
     public void messageArrived(String topic, MqttMessage message) throws Exception {
         Log.i(TAG, "Message arrived, " + message.getPayload().length + " bytes.");
-        /*try {
+        try {
             Sensors.RoverSensors roverSensors = Sensors.RoverSensors.parseFrom(message.getPayload());
             Log.i(TAG, "Parsed message " + roverSensors);
             if (roverSensors.hasAccel() && roverSensors.getAccel().hasX()) {
@@ -170,9 +178,7 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
         } catch (InvalidProtocolBufferException e) {
             Log.e(TAG, "Protobuf parse exception: " + e);
             throw e;
-        }*/
-        fBoiteDeTexte.setText(new String(message.getPayload()));
-
+        }
     }
 
     @Override
