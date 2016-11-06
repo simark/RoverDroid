@@ -168,10 +168,10 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
 
     @Override
     public void messageArrived(String topic, MqttMessage message) throws Exception {
-        Log.i(TAG, "Message arrived, " + message.getPayload().length + " bytes.");
+        Log.v(TAG, "Message arrived, " + message.getPayload().length + " bytes.");
         try {
             Sensors.RoverSensors roverSensors = Sensors.RoverSensors.parseFrom(message.getPayload());
-            Log.i(TAG, "Parsed message " + roverSensors);
+            Log.v(TAG, "Parsed message " + roverSensors);
             if (roverSensors.hasAccel() && roverSensors.getAccel().hasX()) {
                 fBoiteDeTexte.setText("Accel x: " + roverSensors.getAccel().getX());
             }
