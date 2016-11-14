@@ -1,0 +1,10 @@
+syntax = "proto2";
+
+option java_package = "ca.simark.roverdroid.proto";
+
+package PolarsysRover;
+
+message RoverControls {
+  optional sint32 left = 1;
+  optional sint32 right = 2;
+}
