@@ -325,40 +325,48 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
         }
     }
 
-    private void doSubscribeSensors() {
+    private void doSubscribe(final String topic) {
         try {
-            fClient.subscribe(SENSORS_TOPIC, 0, null, new IMqttActionListener() {
+            fClient.subscribe(topic, 0, null, new IMqttActionListener() {
                 @Override
                 public void onSuccess(IMqttToken asyncActionToken) {
-                    Log.i(TAG, "Subscribe success.");
+                    Log.i(TAG, "Subscribe success to " + topic);
                 }
 
                 @Override
                 public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
-                    Log.e(TAG, "We failed to subscribe. " + exception);
+                    Log.e(TAG, "We failed to subscribe to " + topic + ": " + exception);
                 }
             });
         } catch (MqttException e) {
-            Log.e(TAG, "Caught subscribe exception: " + e);
+            Log.e(TAG, "Caught exception while subscribing to " + topic + ": " + e);
         }
     }
 
-    private void doUnsubscribeSensors() {
+    private void doUnsubscribe(final String topic) {
         try {
-            fClient.unsubscribe(SENSORS_TOPIC, null, new IMqttActionListener() {
+            fClient.unsubscribe(topic, null, new IMqttActionListener() {
                 @Override
                 public void onSuccess(IMqttToken asyncActionToken) {
-                    Log.i(TAG, "Unubscribe success.");
+                    Log.i(TAG, "Unsubscribe success from " + topic);
                 }
 
                 @Override
                 public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
-                    Log.e(TAG, "We failed to unsubscribe. " + exception);
+                    Log.e(TAG, "We failed to unsubscribe from " + topic + ": " + exception);
                 }
             });
         } catch (MqttException e) {
-            Log.e(TAG, "Caught unsubscribe exception: " + e);
+            Log.e(TAG, "Caught exception while unsubscribing from " + topic + ": " + e);
         }
+    }
+
+    private void doSubscribeSensors() {
+        doSubscribe(SENSORS_TOPIC);
+    }
+
+    private void doUnsubscribeSensors() {
+        doUnsubscribe(SENSORS_TOPIC);
     }
 
     @Override
