@@ -54,6 +54,8 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
     private int lastLeft = Integer.MAX_VALUE;
     private int lastRight = Integer.MAX_VALUE;
 
+    private static final String SENSORS_TOPIC = "/polarsys-rover/sensors";
+
     private void showProgressDialog() {
         fProgressDialog = new ProgressDialog(this);
         fProgressDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
@@ -325,7 +327,7 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
 
     private void doSubscribeSensors() {
         try {
-            fClient.subscribe("/polarsys-rover/sensors", 0, null, new IMqttActionListener() {
+            fClient.subscribe(SENSORS_TOPIC, 0, null, new IMqttActionListener() {
                 @Override
                 public void onSuccess(IMqttToken asyncActionToken) {
                     Log.i(TAG, "Subscribe success.");
@@ -343,7 +345,7 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
 
     private void doUnsubscribeSensors() {
         try {
-            fClient.unsubscribe("/polarsys-rover/sensors", null, new IMqttActionListener() {
+            fClient.unsubscribe(SENSORS_TOPIC, null, new IMqttActionListener() {
                 @Override
                 public void onSuccess(IMqttToken asyncActionToken) {
                     Log.i(TAG, "Unubscribe success.");
