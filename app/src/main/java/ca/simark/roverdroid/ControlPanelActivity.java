@@ -39,6 +39,14 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
     SeekBar steer_seek_bar, power_seek_bar;
     TextView power_level_text_view;
     Button stop_button, straight_button;
+    TextView text_view_accel_x, text_view_accel_y, text_view_accel_z;
+    TextView text_view_gyro_x, text_view_gyro_y, text_view_gyro_z;
+    TextView text_view_compass_x, text_view_compass_y, text_view_compass_z;
+    TextView text_view_battery;
+
+    Button button_toggle_sub_sensors;
+    boolean subscribed_to_sensors = false;
+
     ProgressDialog fProgressDialog;
     private Controls.RoverControls.Builder fControlsBuilder;
 
@@ -96,7 +104,7 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
                 @Override
                 public void onSuccess(IMqttToken asyncActionToken) {
                     Log.i(TAG, "Connect success.");
-                    doSubscribe();
+                    dismissProgressDialog();
                 }
 
                 @Override
@@ -202,6 +210,35 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
                 steer_seek_bar.setProgress(steer_seek_bar.getMax() / 2);
             }
         });
+
+        text_view_accel_x = (TextView) findViewById(R.id.text_view_accel_x);
+        text_view_accel_y = (TextView) findViewById(R.id.text_view_accel_y);
+        text_view_accel_z = (TextView) findViewById(R.id.text_view_accel_z);
+
+        text_view_gyro_x = (TextView) findViewById(R.id.text_view_gyro_x);
+        text_view_gyro_y = (TextView) findViewById(R.id.text_view_gyro_y);
+        text_view_gyro_z = (TextView) findViewById(R.id.text_view_gyro_z);
+
+        text_view_compass_x = (TextView) findViewById(R.id.text_view_compass_x);
+        text_view_compass_y = (TextView) findViewById(R.id.text_view_compass_y);
+        text_view_compass_z = (TextView) findViewById(R.id.text_view_compass_z);
+
+        text_view_battery = (TextView) findViewById(R.id.text_view_battery);
+
+        button_toggle_sub_sensors = (Button) findViewById(R.id.button_toggle_sub_sensors);
+        button_toggle_sub_sensors.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if (subscribed_to_sensors) {
+                    doUnsubscribeSensors();
+                    button_toggle_sub_sensors.setText("Subscribe to sensors");
+                } else {
+                    doSubscribeSensors();
+                    button_toggle_sub_sensors.setText("Unsubscribe from sensors");
+                }
+                subscribed_to_sensors = !subscribed_to_sensors;
+            }
+        });
     }
 
     private void computerMotorLevels() {
@@ -286,24 +323,39 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
         }
     }
 
-    private void doSubscribe() {
+    private void doSubscribeSensors() {
         try {
             fClient.subscribe("/polarsys-rover/sensors", 0, null, new IMqttActionListener() {
                 @Override
                 public void onSuccess(IMqttToken asyncActionToken) {
                     Log.i(TAG, "Subscribe success.");
-                    dismissProgressDialog();
                 }
 
                 @Override
                 public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
                     Log.e(TAG, "We failed to subscribe. " + exception);
-                    dismissProgressDialog();
                 }
             });
         } catch (MqttException e) {
             Log.e(TAG, "Caught subscribe exception: " + e);
-            dismissProgressDialog();
+        }
+    }
+
+    private void doUnsubscribeSensors() {
+        try {
+            fClient.unsubscribe("/polarsys-rover/sensors", null, new IMqttActionListener() {
+                @Override
+                public void onSuccess(IMqttToken asyncActionToken) {
+                    Log.i(TAG, "Unubscribe success.");
+                }
+
+                @Override
+                public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
+                    Log.e(TAG, "We failed to unsubscribe. " + exception);
+                }
+            });
+        } catch (MqttException e) {
+            Log.e(TAG, "Caught unsubscribe exception: " + e);
         }
     }
 
@@ -313,13 +365,66 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
         Log.e(TAG, "cause: " + cause);
     }
 
+    private void setTextViewVal(TextView view, float value) {
+        view.setText(String.format(Locale.getDefault(), "%.2f", value));
+    }
+
     @Override
     public void messageArrived(String topic, MqttMessage message) throws Exception {
         Log.v(TAG, "Message arrived, " + message.getPayload().length + " bytes.");
         try {
             Sensors.RoverSensors roverSensors = Sensors.RoverSensors.parseFrom(message.getPayload());
             Log.v(TAG, "Parsed message " + roverSensors);
-            if (roverSensors.hasAccel() && roverSensors.getAccel().hasX()) {
+            if (roverSensors.hasAccel()) {
+                Sensors.Acceleration accel = roverSensors.getAccel();
+
+                if (accel.hasX()) {
+                    setTextViewVal(text_view_accel_x, accel.getX());
+                }
+
+                if (accel.hasY()) {
+                    setTextViewVal(text_view_accel_y, accel.getY());
+                }
+
+                if (accel.hasZ()) {
+                    setTextViewVal(text_view_accel_z, accel.getZ());
+                }
+            }
+
+            if (roverSensors.hasGyro()) {
+                Sensors.Gyro gyro = roverSensors.getGyro();
+
+                if (gyro.hasX()) {
+                    setTextViewVal(text_view_gyro_x, gyro.getX());
+                }
+
+                if (gyro.hasY()) {
+                    setTextViewVal(text_view_gyro_y, gyro.getY());
+                }
+
+                if (gyro.hasZ()) {
+                    setTextViewVal(text_view_gyro_z, gyro.getZ());
+                }
+            }
+
+            if (roverSensors.hasCompass()) {
+                Sensors.Compass compass = roverSensors.getCompass();
+
+                if (compass.hasX()) {
+                    setTextViewVal(text_view_compass_x, compass.getX());
+                }
+
+                if (compass.hasY()) {
+                    setTextViewVal(text_view_compass_y, compass.getY());
+                }
+
+                if (compass.hasZ()) {
+                    setTextViewVal(text_view_compass_z, compass.getZ());
+                }
+            }
+
+            if (roverSensors.hasBatteryVoltage()) {
+                setTextViewVal(text_view_battery, roverSensors.getBatteryVoltage() / 1000.0f);
             }
         } catch (InvalidProtocolBufferException e) {
             Log.e(TAG, "Protobuf parse exception: " + e);
