@@ -6,8 +6,10 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
-import android.view.MotionEvent;
 import android.view.View;
+import android.widget.Button;
+import android.widget.SeekBar;
+import android.widget.TextView;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 
@@ -21,12 +23,10 @@ import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 
+import java.util.Locale;
+
 import ca.simark.roverdroid.proto.Controls;
 import ca.simark.roverdroid.proto.Sensors;
-
-import static android.view.MotionEvent.ACTION_DOWN;
-import static android.view.MotionEvent.ACTION_MOVE;
-import static android.view.MotionEvent.ACTION_UP;
 
 public class ControlPanelActivity extends AppCompatActivity implements MqttCallback {
 
@@ -36,35 +36,12 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
 
     public static final String TAG = ControlPanelActivity.class.getSimpleName();
 
+    SeekBar steer_seek_bar, power_seek_bar;
+    TextView power_level_text_view;
+    Button stop_button, straight_button;
     ProgressDialog fProgressDialog;
-
-    DirectionSurfaceView fLeftSurface, fRightSurface;
     private Controls.RoverControls.Builder fControlsBuilder;
 
-    class Motor {
-        /* Power, from -100 to 100. */
-        private int fPower;
-        private String fName;
-
-        Motor(String name) {
-            fPower = 0;
-            fName = name;
-        }
-
-        public int getPower() {
-            return fPower;
-        }
-
-        public void setPower(int power) {
-            this.fPower = power;
-        }
-
-        public String getName() {
-            return fName;
-        }
-    };
-
-    private Motor fLeftMotor, fRightMotor;
 
     private int lastLeft = Integer.MAX_VALUE;
     private int lastRight = Integer.MAX_VALUE;
@@ -159,6 +136,11 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
         }
     }
 
+    /* Convert the value of a slider [0, 200] to [-100, 100].  */
+    int seekbarToValue(SeekBar seekbar) {
+        return seekbar.getProgress() - seekbar.getMax() / 2;
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -183,103 +165,125 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
 
         fControlsBuilder = Controls.RoverControls.newBuilder();
 
-        fLeftMotor = new Motor("left");
-        fRightMotor = new Motor("right");
+        power_seek_bar = (SeekBar) findViewById(R.id.power_seek_bar);
+        steer_seek_bar = (SeekBar) findViewById(R.id.steer_seek_bar);
+        power_level_text_view = (TextView) findViewById(R.id.power_level_text_view);
 
-        fLeftSurface = (DirectionSurfaceView) findViewById(R.id.left_surface);
-        fRightSurface = (DirectionSurfaceView) findViewById(R.id.right_surface);
-
-        View.OnTouchListener otl = new View.OnTouchListener() {
+        power_seek_bar.setOnSeekBarChangeListener(new DefaultOnSeeKBarChangeListener() {
             @Override
-            public boolean onTouch(View view, MotionEvent motionEvent) {
-                DirectionSurfaceView v = (DirectionSurfaceView) view;
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                power_level_text_view.setText(String.format(Locale.getDefault(), "%d %%",
+                        seekbarToValue(power_seek_bar)));
 
-                switch (motionEvent.getAction()) {
-                    case ACTION_DOWN:
-                        v.setActive();
-                    case ACTION_MOVE:
-                        computeMotorPower(v, motionEvent.getX(), motionEvent.getY(), v == fLeftSurface ? fLeftMotor : fRightMotor);
-                        return true;
-                    case ACTION_UP:
-                        v.setInactive();
-                        stopAll();
-                        return true;
-                }
-
-                return false;
+                computerMotorLevels();
             }
-        };
+        });
 
-        if (fLeftSurface != null) {
-            fLeftSurface.setOnTouchListener(otl);
-        }
+        steer_seek_bar.setOnSeekBarChangeListener(new DefaultOnSeeKBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                computerMotorLevels();
+            }
+        });
 
-        if (fRightSurface != null) {
-            fRightSurface.setOnTouchListener(otl);
-        }
+        stop_button = (Button) findViewById(R.id.stop_button);
+        straight_button = (Button) findViewById(R.id.straight_button);
+
+        stop_button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                power_seek_bar.setProgress(power_seek_bar.getMax() / 2);
+            }
+        });
+
+        straight_button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                steer_seek_bar.setProgress(steer_seek_bar.getMax() / 2);
+            }
+        });
     }
 
-    private void computeMotorPower(DirectionSurfaceView v, float x, float y, Motor motor) {
-        int width = v.getWidth();
-        int height = v.getHeight();
+    private void computerMotorLevels() {
+        int steer = seekbarToValue(steer_seek_bar);
+        int power = seekbarToValue(power_seek_bar);
 
+        int abs_max_steer = steer_seek_bar.getMax() / 2;
 
+        // Steer ration on a scale of 1 (no steering) to 0 (max steering)
+        double steer_ratio = 1 - (Math.abs(steer) / (double) abs_max_steer);
 
-        if (y < 0) {
-            y = 0;
+        // Double the scale, so it's from 2 (no steering) to 0 (max steering)
+        steer_ratio *= 2;
+
+        // Move the scale, so it's from 1 (no steering) to -1 (max steering)
+        steer_ratio -= 1;
+
+        int left = power, right = power;
+
+        if (power > 0) {
+            if (steer < 0) {
+                // Turning left
+                left = (int) (right * steer_ratio);
+            } else if (steer > 0) {
+                right = (int) (left * steer_ratio);
+            }
+        } else if (power < 0) {
+            if (steer < 0) {
+                // Turning left
+                left = (int) (right * steer_ratio);
+            } else if (steer > 0) {
+                // Turning right
+                right = (int) (left * steer_ratio);
+            }
+        } else {
+            // Straight, keep both sides at "power".
         }
 
-        if (y > height) {
-            y = height;
-        }
+        Log.d(TAG, "steer = " + steer + " power = " + power);
+        Log.d(TAG, "left = " + left + " right = " + right);
+        Log.d(TAG, "Ratio = " + steer_ratio);
 
-        /* Translate so that the middle is at 0. */
-        y -= height / 2.0;
-
-        /* In the view, smaller y means higher and bigger y means lower.  We want the opposite. */
-        y *= -1;
-
-        /* Scale to -100 to 100. */
-        y *= 200.0/height;
-        motor.setPower((int) y);
-
-        updateMotors();
+        sendMotorLevels(left, right);
     }
 
-    private void updateMotors() {
-        /* Check if we have moved enough such that a new command is worth it. */
-        if (fLeftMotor.getPower() == lastLeft && fRightMotor.getPower() == lastRight) {
+    private void sendMotorLevels(int left, int right) {
+        if (left < -100 || left > 100) {
+            Log.e(TAG, "Internal error: invalid value for left motor: " + left);
             return;
         }
 
-        fControlsBuilder.setLeft(fLeftMotor.getPower());
-        fControlsBuilder.setRight(fRightMotor.getPower());
-        Controls.RoverControls message = fControlsBuilder.build();
+        if (right < -100 || right > 100) {
+            Log.e(TAG, "Internal error: invalid value for right motor: " + right);
+            return;
+        }
 
-        lastLeft = fLeftMotor.getPower();
-        lastRight = fRightMotor.getPower();
+        if (left == lastLeft && right == lastRight) {
+            return;
+        }
+
+        lastLeft = left;
+        lastRight = right;
+
+        fControlsBuilder.setLeft(left);
+        fControlsBuilder.setRight(right);
+        Controls.RoverControls msg = fControlsBuilder.build();
 
         try {
-            fClient.publish("/polarsys-rover/controls", message.toByteArray(), 0, false, null, new IMqttActionListener() {
+            fClient.publish("/polarsys-rover/controls", msg.toByteArray(), 0, false, null, new IMqttActionListener() {
                 @Override
                 public void onSuccess(IMqttToken asyncActionToken) {
-                    Log.v(TAG, "Controls sent successfully");
-                }
+                Log.v(TAG, "Controls sent successfully");
+            }
 
-                @Override
+            @Override
                 public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
-                    Log.e(TAG, "Error sending controls 1", exception);
-                }
+                Log.e(TAG, "Error sending controls 1", exception);
+            }
             });
         } catch (MqttException e) {
             Log.e(TAG, "Error sending controls 2", e);
         }
-    }
-
-    private void stopAll() {
-        fLeftMotor.setPower(0);
-        fRightMotor.setPower(0);
-        updateMotors();
     }
 
     private void doSubscribe() {
