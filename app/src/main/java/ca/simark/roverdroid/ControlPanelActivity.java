@@ -3,11 +3,15 @@ package ca.simark.roverdroid;
 import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Bundle;
+import android.os.MemoryFile;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
@@ -23,6 +27,11 @@ import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 
+import java.io.BufferedOutputStream;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.Locale;
 
 import ca.simark.roverdroid.proto.Controls;
@@ -44,8 +53,13 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
     TextView text_view_compass_x, text_view_compass_y, text_view_compass_z;
     TextView text_view_battery;
 
+    ImageView image_view;
+
     Button button_toggle_sub_sensors;
     boolean subscribed_to_sensors = false;
+    Button button_toggle_camera;
+    boolean subscribed_to_camera = false;
+
 
     ProgressDialog fProgressDialog;
     private Controls.RoverControls.Builder fControlsBuilder;
@@ -55,6 +69,7 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
     private int lastRight = Integer.MAX_VALUE;
 
     private static final String SENSORS_TOPIC = "/polarsys-rover/sensors";
+    private static final String FRONT_CAMERA_TOPIC = "/polarsys-rover/front-camera";
 
     private void showProgressDialog() {
         fProgressDialog = new ProgressDialog(this);
@@ -241,6 +256,23 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
                 subscribed_to_sensors = !subscribed_to_sensors;
             }
         });
+
+        image_view = (ImageView) findViewById(R.id.front_camera);
+        button_toggle_camera = (Button) findViewById(R.id.button_toggle_camera);
+        button_toggle_camera.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if (subscribed_to_camera) {
+                    doUnsubscribeCamera();
+                    button_toggle_camera.setText("Subscribe to camera");
+                } else {
+                    doSubscribeCamera();
+                    button_toggle_camera.setText("Unsubscribe from camera");
+                }
+                subscribed_to_camera = !subscribed_to_camera;
+            }
+        });
+
     }
 
     private void computerMotorLevels() {
@@ -369,6 +401,14 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
         doUnsubscribe(SENSORS_TOPIC);
     }
 
+    private void doSubscribeCamera() {
+        doSubscribe(FRONT_CAMERA_TOPIC);
+    }
+
+    private void doUnsubscribeCamera() {
+        doUnsubscribe(FRONT_CAMERA_TOPIC);
+    }
+
     @Override
     public void connectionLost(Throwable cause) {
         Log.e(TAG, "Connection lost!");
@@ -379,9 +419,7 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
         view.setText(String.format(Locale.getDefault(), "%.2f", value));
     }
 
-    @Override
-    public void messageArrived(String topic, MqttMessage message) throws Exception {
-        Log.v(TAG, "Message arrived, " + message.getPayload().length + " bytes.");
+    private void processSensorsMessage(MqttMessage message) throws InvalidProtocolBufferException {
         try {
             Sensors.RoverSensors roverSensors = Sensors.RoverSensors.parseFrom(message.getPayload());
             Log.v(TAG, "Parsed message " + roverSensors);
@@ -439,6 +477,38 @@ public class ControlPanelActivity extends AppCompatActivity implements MqttCallb
         } catch (InvalidProtocolBufferException e) {
             Log.e(TAG, "Protobuf parse exception: " + e);
             throw e;
+        }
+    }
+
+    File tempFile;
+    int n = 0;
+
+    private void processFrontCameraMessage(MqttMessage message) throws IOException {
+        Log.d(TAG, "New image " + message.getPayload().length);
+        n++;
+
+        Log.d(TAG, "Number " + n);
+
+        if (tempFile == null) {
+            File outputDir = this.getCacheDir();
+            tempFile = File.createTempFile("frontcam", "jpg", outputDir);
+        }
+
+        Bitmap bitmap = BitmapFactory.decodeByteArray(message.getPayload(), 0, message.getPayload().length);
+        image_view.setImageBitmap(bitmap);
+    }
+
+    @Override
+    public void messageArrived(String topic, MqttMessage message) throws Exception {
+        Log.v(TAG, "Message arrived on topic " + topic + ", " + message.getPayload().length + " bytes.");
+
+        switch (topic) {
+            case SENSORS_TOPIC:
+                processSensorsMessage(message);
+                break;
+            case FRONT_CAMERA_TOPIC:
+                processFrontCameraMessage(message);
+                break;
         }
     }
 
